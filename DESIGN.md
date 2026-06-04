@@ -1,5 +1,7 @@
 # Dev Launcher — 本地开发服务启动器
 
+中文 | [English](#english)
+
 ## 概述
 
 Dev Launcher 是一款基于 Electron 的桌面应用，用于统一管理本机开发服务的启动、停止、日志查看和 AI 排障。同时暴露本地 REST API，供 coding agent 通过接口自动注册和管理服务。
@@ -527,3 +529,240 @@ npm run dist
 - 无服务依赖 DAG 可视化
 - API Key 未存系统 Keychain（当前读取环境变量或存本地文件）
 - 外部终端模式不保证完整 pid 追踪和日志捕获
+
+---
+
+## English
+
+# Dev Launcher — Local Development Service Launcher
+
+## Overview
+
+Dev Launcher is an Electron desktop application for managing local development services. It provides service start/stop controls, log viewing, health checks, browser opening, optional AI diagnostics, and a localhost REST API for coding agents.
+
+- **Stack**: Electron + TypeScript for the main process, React + Vite + Ant Design for the renderer, Fastify for the local API.
+- **Platform**: macOS first, with Windows and Linux compatibility where supported by Electron and the launcher code.
+- **Version**: 0.1.0 MVP.
+
+## Architecture
+
+The main process owns business logic: configuration persistence, process management, AI calls, and the local API. The renderer is UI-only and calls the main process through `window.electronAPI`, exposed with Electron `contextBridge`.
+
+The local API listens only on `127.0.0.1:19527` and uses Bearer token authentication. Service configuration is stored in `{userData}/config.json`, API tokens in `{userData}/token.json`, and AI settings in `{userData}/ai-settings.json`.
+
+## Project Structure
+
+```txt
+dev-launcher/
+├── package.json
+├── electron-builder.yml
+├── vite.config.ts
+├── tsconfig*.json
+├── Dev Launcher.command
+├── src/
+│   ├── main/          # Electron main process, API, services, AI modules
+│   ├── preload/       # contextBridge preload
+│   └── renderer/      # React UI
+└── dist/              # Build output
+```
+
+## Core Data Types
+
+`DevService` describes a managed service: id, name, group, kind, working directory, command, run mode, port, URLs, browser/terminal preferences, environment variables, dependencies, enabled state, source, description, and tags.
+
+`ServiceRuntime` describes current runtime state: status, pid, start/stop timestamps, error, port, and whether the port is free.
+
+`AiSettings` stores the AI provider, key source, model, repair execution policy, and optional API key.
+
+`RepairAction` describes a suggested repair step such as running a command, opening a file, restarting a service, or previewing a file edit.
+
+`DiagnoseResult` contains issues, possible causes, suggestions, repair actions, and the raw model response for a service diagnosis.
+
+## IPC Channels
+
+Service management:
+
+| Channel | Purpose |
+|---|---|
+| `services:list` | List all services with runtime state |
+| `services:get` | Get one service |
+| `services:create` | Create a service |
+| `services:update` | Update a service |
+| `services:delete` | Delete a service |
+| `services:start` | Start a service |
+| `services:stop` | Stop a service |
+| `services:restart` | Restart a service |
+| `services:startAll` | Start all services |
+| `services:stopAll` | Stop all services |
+| `services:getLogs` | Get service logs |
+| `services:registerFromFile` | Register from `dev-launcher.service.json` |
+| `services:validate` | Validate a registration file |
+
+AI diagnostics:
+
+| Channel | Purpose |
+|---|---|
+| `ai:diagnoseService` | Diagnose a service |
+| `ai:createRepairPlan` | Diagnose and create a repair plan |
+| `ai:executeRepairAction` | Execute an approved repair action |
+| `ai:getSettings` | Read AI settings |
+| `ai:updateSettings` | Update AI settings |
+| `ai:isInitialized` | Check whether AI is ready |
+
+System and app:
+
+| Channel | Purpose |
+|---|---|
+| `system:listBrowsers` | List available browsers |
+| `system:listTerminals` | List available terminals |
+| `system:openUrl` | Open a service URL |
+| `system:openFolder` | Open a service folder |
+| `app:getStatus` | Get app status |
+| `app:getTokenInfo` | Get API token information |
+
+Renderer events:
+
+| Event | Purpose |
+|---|---|
+| `service:log` | Push service log lines |
+| `service:statusChange` | Push service status changes |
+
+## REST API
+
+- Base URL: `http://127.0.0.1:19527`
+- Authentication: `Authorization: Bearer <token>`
+- OpenAPI: `GET /api/openapi.json` without authentication
+- Token access: visible in the desktop app's API information page
+
+Endpoints:
+
+| Method | Path | Purpose |
+|---|---|---|
+| `GET` | `/api/services` | List services |
+| `GET` | `/api/services/:id` | Get one service |
+| `POST` | `/api/services` | Create a service |
+| `PUT` | `/api/services/:id` | Update a service |
+| `DELETE` | `/api/services/:id` | Delete a service |
+| `POST` | `/api/services/:id/start` | Start a service |
+| `POST` | `/api/services/:id/stop` | Stop a service |
+| `POST` | `/api/services/:id/restart` | Restart a service |
+| `GET` | `/api/services/:id/logs` | Get service logs |
+| `POST` | `/api/services/register-from-file` | Register from a declaration file |
+| `POST` | `/api/services/validate` | Validate a declaration file |
+| `POST` | `/api/ai/services/:id/diagnose` | Diagnose a service |
+| `POST` | `/api/ai/services/:id/repair-plan` | Create a repair plan |
+| `GET` | `/api/status` | App status, no authentication |
+| `GET` | `/api/openapi.json` | OpenAPI document, no authentication |
+
+Repair actions are not executed through the REST API in the MVP. Repairs must be confirmed in the desktop UI.
+
+## Coding Agent Registration Flow
+
+1. Create `dev-launcher.service.json` in the target project root.
+2. Ask the user for the API token from the desktop app, or use `DEV_LAUNCHER_TOKEN` when already provided.
+3. Call `/api/services/register-from-file` with the declaration file path.
+4. Optionally call `/api/ai/services/:id/diagnose`.
+
+Example declaration:
+
+```json
+{
+  "id": "my-service",
+  "name": "My Service",
+  "group": "local-projects",
+  "kind": "web",
+  "cwd": "/absolute/path/to/project",
+  "command": "npm run dev",
+  "runMode": "managed-process",
+  "port": 3000,
+  "openUrl": "http://localhost:3000",
+  "healthCheckUrl": "http://localhost:3000/health",
+  "env": { "NODE_ENV": "development" },
+  "dependsOn": [],
+  "enabled": true,
+  "source": "agent",
+  "description": "Service description",
+  "tags": ["web", "react"]
+}
+```
+
+## Service Lifecycle
+
+Managed process mode:
+
+1. Check whether the declared port is occupied.
+2. Start dependencies in topological order and reject cycles.
+3. Start with `child_process.spawn(command, { cwd, shell: true, env })`.
+4. Capture stdout and stderr into a bounded log buffer.
+5. Mark as running after the process survives the startup window.
+6. Poll `healthCheckUrl` when configured.
+7. Stop with `tree-kill` using SIGTERM.
+
+External terminal mode:
+
+1. Open the configured terminal and run the command.
+2. PID tracking and log capture are not guaranteed.
+3. Use this mode for interactive CLI tools.
+
+Browser opening supports the default browser and selected browsers such as Safari, Chrome, Firefox, and Edge where available.
+
+## AI Diagnostics
+
+The diagnostics context includes service configuration, runtime state, recent logs, port checks, health check results, and selected project files such as `package.json`, `README.md`, `.env.example`, and `docker-compose.yml`.
+
+Safety constraints:
+
+- AI cannot silently edit files. `edit-file` actions only show patch previews.
+- High-risk commands are filtered, including destructive file, Git, and database operations.
+- Repairs must be confirmed in the UI.
+- API keys should not be written to logs.
+
+Allowed repair action types:
+
+| Type | Purpose | Risk |
+|---|---|---|
+| `run-command` | Run a safe command | low/medium |
+| `restart-service` | Restart a service | low |
+| `open-file` | Open a file in the editor | low |
+| `edit-file` | Show a patch preview | medium |
+
+## Configuration Storage
+
+Configuration is stored in Electron's `userData` directory:
+
+```txt
+~/Library/Application Support/Dev Launcher/
+├── config.json
+├── token.json
+└── ai-settings.json
+```
+
+Corrupt configuration files are backed up as `.bak` and replaced with empty configuration. Service validation uses Zod. AI API keys should be read from environment variables or app settings and should not be committed.
+
+## Development Commands
+
+```bash
+npm install
+npm run dev:renderer
+npm run dev:main
+npm run build
+npm start
+npm run typecheck
+npm run dist
+```
+
+## MVP Limitations
+
+- No silent auto-repair.
+- No full AI agent sandbox.
+- No browser profile management.
+- No terminal session management.
+- No full PTY integration.
+- No Docker, Redis, or database-specific management panels.
+- No full-text log indexing.
+- No remote access.
+- No plugin system.
+- No multi-user permissions.
+- No automatic full-disk project scanning.
+- No service dependency graph visualization.
+- External terminal mode does not guarantee PID tracking or log capture.
