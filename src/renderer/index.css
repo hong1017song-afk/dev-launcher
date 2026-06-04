@@ -1,0 +1,106 @@
+:root {
+  --cyber-green: #00FF41;
+  --cyber-bg: #0D1117;
+  --cyber-bg-elevated: #161B22;
+  --cyber-border: #30363D;
+  --cyber-error: #ff4d4f;
+  --cyber-warning: #faad14;
+}
+
+body {
+  background-color: var(--cyber-bg);
+  color: #c9d1d9;
+  margin: 0;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+}
+
+/* CRT Scanline effect */
+.cyber-bg::after {
+  content: " ";
+  display: block;
+  position: absolute;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  right: 0;
+  background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.06), rgba(0, 255, 0, 0.02), rgba(0, 0, 255, 0.06));
+  z-index: 2;
+  background-size: 100% 2px, 3px 100%;
+  pointer-events: none;
+}
+
+/* Ant Design Overrides for Cyber Command Center */
+
+/* Layout */
+.ant-layout {
+  background: var(--cyber-bg) !important;
+}
+
+/* Menu */
+.ant-menu-dark, .ant-menu-dark .ant-menu-sub {
+  background: transparent !important;
+}
+
+.ant-menu-dark .ant-menu-item-selected {
+  background-color: rgba(0, 255, 65, 0.1) !important;
+  color: var(--cyber-green) !important;
+  border-right: 2px solid var(--cyber-green) !important;
+}
+
+.ant-menu-dark .ant-menu-item:hover {
+  color: var(--cyber-green) !important;
+}
+
+/* Tables */
+.cyber-table .ant-table {
+  background: transparent !important;
+}
+
+.cyber-table .ant-table-thead > tr > th {
+  background: var(--cyber-bg-elevated) !important;
+  border-bottom: 1px solid var(--cyber-border) !important;
+  color: #8b949e !important;
+  font-weight: 500;
+  text-transform: uppercase;
+  font-size: 12px;
+  letter-spacing: 1px;
+}
+
+.cyber-table .ant-table-tbody > tr > td {
+  border-bottom: 1px dashed var(--cyber-border) !important;
+  font-family: 'Fira Code', monospace;
+  font-size: 13px;
+}
+
+.cyber-table .ant-table-tbody > tr.ant-table-row:hover > td {
+  background: rgba(0, 255, 65, 0.05) !important;
+}
+
+/* Tags */
+.cyber-tag {
+  background: transparent !important;
+  border: 1px solid var(--cyber-border) !important;
+  border-radius: 2px !important;
+  font-family: 'Fira Code', monospace;
+}
+
+/* Glowing Buttons */
+.cyber-btn-primary {
+  border-color: var(--cyber-green) !important;
+  color: var(--cyber-green) !important;
+  background: transparent !important;
+  box-shadow: 0 0 5px rgba(0, 255, 65, 0.2) !important;
+  transition: all 0.3s ease;
+}
+
+.cyber-btn-primary:hover, .cyber-btn-primary:focus {
+  background: rgba(0, 255, 65, 0.1) !important;
+  box-shadow: 0 0 10px rgba(0, 255, 65, 0.5) !important;
+  color: #fff !important;
+}
+
+/* Log Container */
+.cyber-log-container {
+  border: 1px solid var(--cyber-border);
+  box-shadow: inset 0 0 10px rgba(0,0,0,0.5);
+}

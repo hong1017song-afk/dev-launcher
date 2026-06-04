@@ -1,0 +1,20 @@
+appId: com.devlauncher.app
+productName: Dev Launcher
+directories:
+  output: release
+  buildResources: build
+files:
+  - dist/**/*
+  - package.json
+mac:
+  category: public.app-category.developer-tools
+  identity: null
+  target:
+    - dir
+win:
+  target:
+    - nsis
+linux:
+  target:
+    - AppImage
+    - deb
