@@ -6,6 +6,8 @@ Dev Launcher is a local desktop tool for managing development services from one 
 
 ## Features
 
+![Dev Launcher service dashboard](docs/images/dev-launcher-dashboard.png)
+
 - Manage local services with commands, working directories, ports, dependencies, and health checks.
 - Start services as managed processes or in an external terminal.
 - View recent service logs in the desktop UI.
@@ -79,6 +81,8 @@ MIT
 Dev Launcher 是一个本地桌面开发服务管理工具。它可以统一启动和停止本机项目、查看日志、执行健康检查、打开服务地址，并提供本地 API，方便 coding agent 自动注册和管理开发服务。
 
 ## 功能
+
+![Dev Launcher 服务管理界面](docs/images/dev-launcher-dashboard.png)
 
 - 管理本地服务的启动命令、工作目录、端口、依赖和健康检查。
 - 支持托管进程启动，也支持在外部终端中启动。
