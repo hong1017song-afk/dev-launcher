@@ -2,6 +2,7 @@ import { exec } from 'child_process';
 import { promisify } from 'util';
 import { RepairAction } from '../shared/types';
 import { ServiceManager } from '../services/serviceManager';
+import { buildShellEnv } from '../services/shellEnv';
 
 const execAsync = promisify(exec);
 
@@ -48,7 +49,7 @@ export class RepairExecutor {
       const { stdout, stderr } = await execAsync(action.command, {
         cwd,
         timeout: 60000,
-        env: { ...process.env },
+        env: buildShellEnv(),
       });
       return { success: true, output: stdout + (stderr ? '\n[STDERR]\n' + stderr : '') };
     } catch (err: unknown) {

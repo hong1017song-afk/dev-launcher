@@ -132,7 +132,7 @@ export class ServiceManager {
       return;
     }
 
-    this.processManager.start(service.id, service.command, service.cwd, service.env);
+    await this.processManager.start(service.id, service.command, service.cwd, service.env);
 
     if (service.healthCheckUrl) {
       const healthy = await this.healthChecker.waitForHealthy(service.healthCheckUrl);
@@ -140,6 +140,7 @@ export class ServiceManager {
         rt.status = 'error';
         rt.error = '健康检查超时';
         this.runtimes.set(serviceId, rt);
+        throw new Error(rt.error);
       }
     }
   }

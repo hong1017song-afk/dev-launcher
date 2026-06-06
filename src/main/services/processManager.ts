@@ -2,6 +2,7 @@ import { ChildProcess, spawn } from 'child_process';
 import treeKill from 'tree-kill';
 import { LogBuffer } from './logBuffer';
 import { ServiceStatus } from '../shared/types';
+import { buildShellEnv } from './shellEnv';
 
 export interface ManagedProcess {
   serviceId: string;
@@ -35,7 +36,7 @@ export class ProcessManager {
     return new Map(this.processes);
   }
 
-  start(serviceId: string, command: string, cwd: string, env: Record<string, string>): void {
+  async start(serviceId: string, command: string, cwd: string, env: Record<string, string>): Promise<void> {
     const existing = this.processes.get(serviceId);
     if (existing && existing.status === 'running') {
       return;
@@ -52,7 +53,7 @@ export class ProcessManager {
     this.emitStatus(serviceId, 'starting');
 
     try {
-      const childEnv = { ...process.env, ...env };
+      const childEnv = buildShellEnv(env);
       const child = spawn(command, {
         cwd,
         shell: true,
@@ -81,33 +82,52 @@ export class ProcessManager {
         }
       });
 
-      child.on('error', (err) => {
-        mp.status = 'error';
-        mp.error = err.message;
-        mp.logBuffer.append('[ERROR] ' + err.message);
-        this.emitStatus(serviceId, 'error');
-      });
+      await new Promise<void>((resolve, reject) => {
+        let settled = false;
+        const settle = (err?: Error) => {
+          if (settled) return;
+          settled = true;
+          if (err) reject(err);
+          else resolve();
+        };
 
-      child.on('exit', (code) => {
-        mp.logBuffer.append(`[EXIT] 进程退出, 退出码: ${code ?? 'null'}`);
-        mp.status = 'stopped';
-        mp.stoppedAt = Date.now();
-        mp.process = undefined;
-        mp.pid = undefined;
-        this.emitStatus(serviceId, 'stopped');
-      });
+        child.on('error', (err) => {
+          mp.status = 'error';
+          mp.error = err.message;
+          mp.logBuffer.append('[ERROR] ' + err.message);
+          this.emitStatus(serviceId, 'error');
+          settle(err);
+        });
 
-      setTimeout(() => {
-        if (mp.status === 'starting') {
-          mp.status = 'running';
-          this.emitStatus(serviceId, 'running');
-        }
-      }, 1000);
+        child.on('exit', (code) => {
+          mp.logBuffer.append(`[EXIT] 进程退出, 退出码: ${code ?? 'null'}`);
+          mp.status = code && code !== 0 ? 'error' : 'stopped';
+          mp.error = code && code !== 0 ? `进程过早退出，退出码: ${code}` : undefined;
+          mp.stoppedAt = Date.now();
+          mp.process = undefined;
+          mp.pid = undefined;
+          this.emitStatus(serviceId, mp.status);
+          if (code && code !== 0) {
+            settle(new Error(mp.error));
+          } else {
+            settle();
+          }
+        });
+
+        setTimeout(() => {
+          if (mp.status === 'starting') {
+            mp.status = 'running';
+            this.emitStatus(serviceId, 'running');
+          }
+          settle();
+        }, 1000);
+      });
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : String(err);
       mp.status = 'error';
       mp.error = message;
       this.emitStatus(serviceId, 'error');
+      throw err;
     }
   }
 
