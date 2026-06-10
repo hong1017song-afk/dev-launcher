@@ -15,7 +15,7 @@ export class Diagnostics {
 
   async diagnose(service: DevService): Promise<DiagnoseResult> {
     if (!isInitialized()) {
-      throw new Error('AI 客户端未初始化，请先配置 OpenAI API Key');
+      throw new Error('AI 客户端未初始化，请先在 AI 设置页配置 API Key（支持 DeepSeek 和 OpenAI）');
     }
 
     const openai = getOpenAI();
@@ -54,6 +54,8 @@ export class Diagnostics {
       `状态: ${runtime.status}`,
       runtime.error ? `错误: ${runtime.error}` : '',
       runtime.pid ? `PID: ${runtime.pid}` : '',
+      `端口可释放: ${runtime.portFree ? '是' : '否'}`,
+      runtime.port ? `服务端口: ${runtime.port}` : '',
       '',
       `## 最近日志 (最近100行)`,
       logs.slice(-100).join('\n') || '(无日志)',
@@ -62,12 +64,13 @@ export class Diagnostics {
       ...projectFiles.map((f) => `### ${f.name}\n${f.content}`),
     ].filter(Boolean).join('\n');
 
-    const response = await openai.chat.completions.create({
-      model: getModel(),
-      messages: [
-        {
-          role: 'system',
-          content: `你是一个开发服务诊断专家。分析服务的配置、状态和日志，诊断问题并提供修复建议。
+    try {
+      const response = await openai.chat.completions.create({
+        model: getModel(),
+        messages: [
+          {
+            role: 'system',
+            content: `你是一个开发服务诊断专家。分析服务的配置、状态和日志，诊断问题并提供修复建议。
 
 返回 JSON 格式:
 {
@@ -93,40 +96,56 @@ export class Diagnostics {
 - 高风险操作只能作为建议文本，不生成修复动作
 - 如果没有发现明确问题，issues 可以为空
 - 命令必须使用安全、常见的包管理器命令`,
-        },
-        { role: 'user', content: contextParts },
-      ],
-      response_format: { type: 'json_object' },
-    });
+          },
+          { role: 'user', content: contextParts },
+        ],
+        response_format: { type: 'json_object' },
+      });
 
-    const content = response.choices[0]?.message?.content || '{}';
-    let parsed: {
-      issues?: string[];
-      possibleCauses?: string[];
-      suggestions?: string[];
-      repairActions?: RepairAction[];
-    };
+      const content = response.choices[0]?.message?.content || '{}';
 
-    try {
-      parsed = JSON.parse(content);
-    } catch {
-      parsed = {};
-    }
+      let parsed: {
+        issues?: string[];
+        possibleCauses?: string[];
+        suggestions?: string[];
+        repairActions?: RepairAction[];
+      };
 
-    return {
-      serviceId: service.id,
-      timestamp: Date.now(),
-      status: runtime.status,
-      issues: parsed.issues || [],
-      possibleCauses: parsed.possibleCauses || [],
-      suggestions: parsed.suggestions || [],
-      repairActions: (parsed.repairActions || []).map((a, i) => ({
-        ...a,
-        id: `repair-${service.id}-${Date.now()}-${i}`,
+      try {
+        parsed = JSON.parse(content);
+      } catch {
+        throw new Error('AI 返回了无效的 JSON 格式，请稍后重试');
+      }
+
+      return {
         serviceId: service.id,
-      })),
-      rawResponse: content,
-    };
+        timestamp: Date.now(),
+        status: runtime.status,
+        issues: parsed.issues || [],
+        possibleCauses: parsed.possibleCauses || [],
+        suggestions: parsed.suggestions || [],
+        repairActions: (parsed.repairActions || []).map((a, i) => ({
+          ...a,
+          id: `repair-${service.id}-${Date.now()}-${i}`,
+          serviceId: service.id,
+        })),
+        rawResponse: content,
+      };
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+
+      if (message.includes('401') || message.includes('429') || message.includes('Incorrect API key') || message.includes('Invalid API key') || message.includes('Authentication') || message.includes('403')) {
+        throw new Error('API Key 无效或已过期，请在 AI 设置页更新 Key');
+      }
+      if (message.includes('ENOTFOUND') || message.includes('ECONNREFUSED') || message.includes('ETIMEDOUT') || message.includes('fetch failed') || message.includes('network') || message.includes('connect')) {
+        throw new Error('无法连接到 AI 服务，请检查网络连接');
+      }
+      if (message.includes('JSON')) {
+        throw new Error(message);
+      }
+
+      throw new Error(`AI 诊断失败: ${message}`);
+    }
   }
 
   private readRelevantFiles(cwd: string): { name: string; content: string }[] {

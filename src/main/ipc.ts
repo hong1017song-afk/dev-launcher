@@ -107,7 +107,13 @@ export function registerIpcHandlers(
   });
 
   ipcMain.handle('ai:executeRepairAction', async (_e, action: Record<string, unknown>) => {
-    return repairExecutor.execute(action as any);
+    const serviceId = (action as any).serviceId as string;
+    let serviceCwd = process.cwd();
+    if (serviceId) {
+      const service = store.get(serviceId);
+      if (service) serviceCwd = service.cwd;
+    }
+    return repairExecutor.execute(action as any, serviceCwd);
   });
 
   ipcMain.handle('ai:getSettings', () => {
@@ -171,6 +177,10 @@ export function registerIpcHandlers(
       serviceCount: store.list().length,
       runningCount: runtimes.filter((r) => r.status === 'running').length,
     };
+  });
+
+  ipcMain.handle('app:getAppLogs', () => {
+    return serviceManager.getAppLogs();
   });
 
   ipcMain.handle('app:getTokenInfo', () => {

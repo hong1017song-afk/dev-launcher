@@ -86,7 +86,7 @@ Field rules:
 - `enabled`: use `true`.
 - `env`: use `{}` unless the project explicitly requires values.
 - `dependsOn`: use `[]` unless the user or project clearly declares dependencies.
-- `port`: only set when confident.
+- `port`: only set when confident. One port can only belong to one enabled service. Registering a duplicate port will fail with a clear error (port number, conflicting service name, conflicting service ID).
 - `openUrl`: only set when confident.
 - `healthCheckUrl`: prefer a real health endpoint. If none exists, use `openUrl` only when the page responds reliably.
 
@@ -222,15 +222,25 @@ Expected success response:
 
 `action` may also be `updated`.
 
+Port conflict error response (HTTP 400):
+
+```json
+{
+  "success": false,
+  "error": "端口 5173 已被启用服务 \"Other Service\" (other-service) 占用"
+}
+```
+
+This applies to `POST /api/services`, `PUT /api/services/:id`, and `POST /api/services/register-from-file`.
+
 ## Runtime Behavior Notes
 
 Managed process services:
 
 - Dev Launcher starts the command with `cwd`, `shell: true`, and `env`.
 - Logs are captured from stdout/stderr.
-- Stop terminates the managed process tree.
-- If the service was already running outside Dev Launcher, Dev Launcher may identify it through `port` and `healthCheckUrl`.
-- Stop can terminate listener processes on the declared service ports. Be careful: only declare ports owned by this service.
+- Stop terminates the managed process tree (only the PID tracked by Dev Launcher; it does not kill processes by port).
+- If a port is occupied but no managed PID exists for this service, the service will show a port conflict error instead of being marked as running. Register only one service per port.
 
 External terminal services:
 
@@ -242,9 +252,10 @@ External terminal services:
 Port and health checks:
 
 - `port` is used for LISTEN-state detection only.
-- `healthCheckUrl` is used to decide whether an occupied port is actually the target service.
-- If a service opens in the browser but shows as stopped, verify `port`, `openUrl`, and `healthCheckUrl`.
-- If stop does not work, verify all service-owned listening ports are declared.
+- A service is only marked as running when Dev Launcher manages its process PID. Port occupation alone does not indicate the service is running under Dev Launcher.
+- If a port is occupied by a different service's managed process, the service will show a conflict error (e.g. "Port 3000 is occupied by service X").
+- If a service opens in the browser but shows as stopped or conflict, verify `port`, `openUrl`, and `healthCheckUrl` — another enabled service may have claimed the same port.
+- If stop does not work for a service without a managed PID, the port may be owned by an external process. Dev Launcher will not blindly terminate processes by port. Manually stop the process, then verify.
 
 ## Troubleshooting
 
@@ -260,13 +271,13 @@ API connection refused:
 
 Port occupied on start:
 
-- If `healthCheckUrl` is healthy, Dev Launcher should mark the service as running.
-- If not healthy, do not overwrite the port. Report the conflict.
+- If the same port is already assigned to another enabled service, Dev Launcher will reject the start with an error naming the conflicting service. Change one of the service ports.
+- If a different process occupies the port (not managed by Dev Launcher), start still fails. Stop the external process first.
 
 Service stays running after stop:
 
-- Check whether the process is external-terminal mode.
-- Check whether the declared `port`, `openUrl`, and `healthCheckUrl` include all service-owned ports.
+- Check whether the process is external-terminal mode (not tracked by Dev Launcher).
+- If the service has no managed PID, Dev Launcher will not kill processes by port. Manually kill the process, then the service status will update on the next refresh.
 - Do not kill unrelated ports.
 
 OpenAPI:
@@ -376,7 +387,7 @@ dev-launcher.service.json
 - `enabled`：使用 `true`。
 - `env`：除非项目明确需要，否则使用 `{}`。
 - `dependsOn`：除非用户或项目明确声明依赖，否则使用 `[]`。
-- `port`：只有在能可靠确认时填写。
+- `port`：只有在能可靠确认时填写。同一端口只能归属一个启用服务，注册重复端口将返回明确错误（端口号、冲突服务名称、冲突服务 ID）。
 - `openUrl`：只有在能可靠确认时填写。
 - `healthCheckUrl`：优先使用真实健康检查端点；如果没有，只有页面能稳定响应时才使用 `openUrl`。
 
@@ -512,15 +523,25 @@ curl -X POST http://127.0.0.1:19527/api/services/register-from-file \
 
 `action` 也可能是 `updated`。
 
+端口冲突错误响应（HTTP 400）：
+
+```json
+{
+  "success": false,
+  "error": "端口 5173 已被启用服务 \"Other Service\" (other-service) 占用"
+}
+```
+
+适用于 `POST /api/services`、`PUT /api/services/:id` 和 `POST /api/services/register-from-file`。
+
 ## 运行行为说明
 
 托管进程服务：
 
 - Dev Launcher 使用 `cwd`、`shell: true` 和 `env` 启动命令。
 - 日志从 stdout/stderr 捕获。
-- 停止时会终止托管进程树。
-- 如果服务已在 Dev Launcher 外部运行，Dev Launcher 可能通过 `port` 和 `healthCheckUrl` 识别它。
-- 停止操作可能终止声明端口上的监听进程。只声明该服务自己拥有的端口。
+- 停止时会终止托管进程树（仅终止 Dev Launcher 记录的 PID，不会按端口杀进程）。
+- 如果端口被占用但没有该服务的托管 PID，服务将显示端口冲突错误而非标记为 running。每个端口只注册一个服务。
 
 外部终端服务：
 
@@ -532,9 +553,10 @@ curl -X POST http://127.0.0.1:19527/api/services/register-from-file \
 端口和健康检查：
 
 - `port` 只用于 LISTEN 状态检测。
-- `healthCheckUrl` 用于判断被占用端口是否属于目标服务。
-- 如果服务能在浏览器打开但状态显示为 stopped，检查 `port`、`openUrl` 和 `healthCheckUrl`。
-- 如果停止失败，检查该服务拥有的所有监听端口是否都已声明。
+- 服务只有在 Dev Launcher 托管其进程 PID 时才会被标记为 running。端口被占用来不代表该服务在 Dev Launcher 管理下运行。
+- 如果端口被其他服务的托管进程占用，本服务将显示冲突错误（如"端口 3000 被服务 X 占用"）。
+- 如果服务能在浏览器打开但状态显示为 stopped 或冲突，检查 `port`、`openUrl` 和 `healthCheckUrl`——可能另一个启用服务已占用该端口。
+- 如果停止没有托管 PID 的服务失败，端口可能属于外部进程。Dev Launcher 不会盲目按端口杀进程。手动终止进程，然后刷新状态。
 
 ## 排障
 
@@ -550,13 +572,13 @@ API connection refused：
 
 启动时端口被占用：
 
-- 如果 `healthCheckUrl` 健康，Dev Launcher 应将服务标记为 running。
-- 如果不健康，不要覆盖该端口，应报告冲突。
+- 如果同端口已分配给其他启用服务，Dev Launcher 将拒绝启动并提示冲突服务名称。修改其中一个服务的端口。
+- 如果其他进程（非 Dev Launcher 管理）占用端口，启动同样失败。先停止外部进程。
 
 停止后服务仍在运行：
 
-- 检查服务是否为 `external-terminal` 模式。
-- 检查声明的 `port`、`openUrl` 和 `healthCheckUrl` 是否覆盖所有服务端口。
+- 检查服务是否为 `external-terminal` 模式（Dev Launcher 不追踪）。
+- 如果服务没有托管 PID，Dev Launcher 不会按端口杀进程。手动 kill 进程后，下次刷新时状态将更新。
 - 不要终止无关端口。
 
 OpenAPI：

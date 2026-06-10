@@ -62,11 +62,29 @@ export class ServiceStore {
     return this.services.find((s) => s.id === id);
   }
 
+  checkPortConflict(serviceId: string, port: number): { conflict: boolean; serviceName?: string; conflictId?: string } {
+    const conflict = this.services.find(
+      (s) => s.id !== serviceId && s.enabled && s.port === port,
+    );
+    if (conflict) {
+      return { conflict: true, serviceName: conflict.name, conflictId: conflict.id };
+    }
+    return { conflict: false };
+  }
+
   create(service: DevService): DevService {
     if (this.services.find((s) => s.id === service.id)) {
       throw new Error(`服务 ID "${service.id}" 已存在`);
     }
     const parsed = devServiceSchema.parse(service);
+    if (parsed.enabled && parsed.port) {
+      const pc = this.checkPortConflict(parsed.id, parsed.port);
+      if (pc.conflict) {
+        throw new Error(
+          `端口 ${parsed.port} 已被启用服务 "${pc.serviceName}" (${pc.conflictId}) 占用`,
+        );
+      }
+    }
     this.services.push(parsed);
     this.save();
     return parsed;
@@ -80,6 +98,18 @@ export class ServiceStore {
     const existing = this.services[index];
     const merged = { ...existing, ...updates, id: existing.id };
     const parsed = devServiceSchema.parse(merged);
+    if (parsed.enabled && parsed.port) {
+      const portChanged = existing.port !== parsed.port;
+      const becameEnabled = !existing.enabled;
+      if (portChanged || becameEnabled) {
+        const pc = this.checkPortConflict(parsed.id, parsed.port);
+        if (pc.conflict) {
+          throw new Error(
+            `端口 ${parsed.port} 已被启用服务 "${pc.serviceName}" (${pc.conflictId}) 占用`,
+          );
+        }
+      }
+    }
     this.services[index] = parsed;
     this.save();
     return parsed;
@@ -98,8 +128,29 @@ export class ServiceStore {
     const parsed = devServiceSchema.parse(service);
     const index = this.services.findIndex((s) => s.id === parsed.id);
     if (index === -1) {
+      if (parsed.enabled && parsed.port) {
+        const pc = this.checkPortConflict(parsed.id, parsed.port);
+        if (pc.conflict) {
+          throw new Error(
+            `端口 ${parsed.port} 已被启用服务 "${pc.serviceName}" (${pc.conflictId}) 占用`,
+          );
+        }
+      }
       this.services.push(parsed);
     } else {
+      const existing = this.services[index];
+      if (parsed.enabled && parsed.port) {
+        const portChanged = existing.port !== parsed.port;
+        const becameEnabled = !existing.enabled;
+        if (portChanged || becameEnabled) {
+          const pc = this.checkPortConflict(parsed.id, parsed.port);
+          if (pc.conflict) {
+            throw new Error(
+              `端口 ${parsed.port} 已被启用服务 "${pc.serviceName}" (${pc.conflictId}) 占用`,
+            );
+          }
+        }
+      }
       this.services[index] = parsed;
     }
     this.save();

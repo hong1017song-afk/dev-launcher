@@ -34,6 +34,7 @@ const api = {
   app: {
     getStatus: () => ipcRenderer.invoke('app:getStatus') as Promise<{ version: string; serviceCount: number; runningCount: number }>,
     getTokenInfo: () => ipcRenderer.invoke('app:getTokenInfo') as Promise<TokenInfo>,
+    getAppLogs: () => ipcRenderer.invoke('app:getAppLogs') as Promise<string[]>,
   },
   onLog: (callback: (serviceId: string, line: string) => void) => {
     const listener = (_event: Electron.IpcRendererEvent, serviceId: string, line: string) => {
@@ -48,6 +49,13 @@ const api = {
     };
     ipcRenderer.on('service:statusChange', listener);
     return () => ipcRenderer.removeListener('service:statusChange', listener);
+  },
+  onApiError: (callback: (message: string) => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, message: string) => {
+      callback(message);
+    };
+    ipcRenderer.on('app:apiError', listener);
+    return () => ipcRenderer.removeListener('app:apiError', listener);
   },
 };
 

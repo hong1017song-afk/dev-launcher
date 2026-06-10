@@ -1,0 +1,18 @@
+{
+  "id": "dev-launcher",
+  "name": "dev-launcher",
+  "group": "local-projects",
+  "kind": "web",
+  "cwd": "/Users/hsh/WorkspaceAI/CodebyAI/start /dev-launcher",
+  "command": "npm run dev",
+  "runMode": "managed-process",
+  "port": 5173,
+  "openUrl": "http://localhost:5173",
+  "healthCheckUrl": "http://localhost:5173",
+  "env": {},
+  "dependsOn": [],
+  "enabled": true,
+  "source": "agent",
+  "description": "本地开发服务启动器 - Electron + React + Vite + Fastify",
+  "tags": ["electron", "react", "vite", "typescript", "fastify", "desktop"]
+}

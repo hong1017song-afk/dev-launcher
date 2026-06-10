@@ -69,18 +69,49 @@ export class PortChecker {
     }
   }
 
+  async terminatePid(pid: number): Promise<void> {
+    try {
+      if (process.platform === 'win32') {
+        await execAsync(`taskkill /PID ${pid} /T /F`);
+      } else {
+        await treeKillAsync(pid, 'SIGTERM');
+      }
+    } catch {
+      // The process may already have exited.
+    }
+  }
+
   async terminatePort(port: number): Promise<void> {
     const pids = await this.getPortPids(port);
     for (const pid of pids) {
-      try {
-        if (process.platform === 'win32') {
-          await execAsync(`taskkill /PID ${pid} /T /F`);
-        } else {
-          await treeKillAsync(pid, 'SIGTERM');
-        }
-      } catch {
-        // The process may already have exited.
+      await this.terminatePid(pid);
+    }
+  }
+
+  async getProcessDetails(pid: number): Promise<{ command: string; cwd?: string } | null> {
+    try {
+      if (process.platform === 'darwin' || process.platform === 'linux') {
+        const { stdout: cmdOut } = await execAsync(`ps -p ${pid} -o args=`);
+        const command = cmdOut.trim();
+        if (!command) return null;
+
+        let cwd: string | undefined;
+        try {
+          const { stdout: cwdOut } = await execAsync(`lsof -p ${pid} -a -d cwd -Fn`);
+          const lines = cwdOut.split('\n');
+          for (const line of lines) {
+            if (line.startsWith('n')) {
+              cwd = line.substring(1);
+              break;
+            }
+          }
+        } catch { /* cwd not available */ }
+
+        return { command, cwd };
       }
+      return null;
+    } catch {
+      return null;
     }
   }
 }

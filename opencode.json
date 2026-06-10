@@ -1,0 +1,13 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "mcp": {
+    "agent-hub": {
+      "type": "local",
+      "command": ["npx", "tsx", "/Users/hsh/WorkspaceAI/CodebyAI/AgentHub/packages/mcp-server/src/server.ts"],
+      "enabled": true,
+      "env": {
+        "BACKEND_URL": "http://localhost:3001"
+      }
+    }
+  }
+}

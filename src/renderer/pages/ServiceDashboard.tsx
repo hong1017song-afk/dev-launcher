@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Space, Button, message, Modal } from 'antd';
-import { PlusOutlined, PlayCircleOutlined, PauseCircleOutlined } from '@ant-design/icons';
+import { Space, Button, message, Modal, Alert } from 'antd';
+import { PlusOutlined, PlayCircleOutlined, PauseCircleOutlined, WarningOutlined } from '@ant-design/icons';
 import ServiceTable from '../components/ServiceTable';
 import ServiceForm from '../components/ServiceForm';
 import LogPanel from '../components/LogPanel';
@@ -18,6 +18,7 @@ const ServiceDashboard: React.FC = () => {
   const [editingService, setEditingService] = useState<DevService | null>(null);
   const [logServiceId, setLogServiceId] = useState<string | null>(null);
   const [diagnoseServiceId, setDiagnoseServiceId] = useState<string | null>(null);
+  const [apiError, setApiError] = useState<string | null>(null);
 
   const refreshServices = useCallback(async () => {
     try {
@@ -41,11 +42,17 @@ const ServiceDashboard: React.FC = () => {
       refreshServices();
     });
 
+    const unsubscribeApiError = window.electronAPI.onApiError((msg) => {
+      setApiError(msg);
+      message.error(msg);
+    });
+
     const interval = setInterval(refreshServices, 2000);
 
     return () => {
       unsubscribeLog();
       unsubscribeStatus();
+      unsubscribeApiError();
       clearInterval(interval);
     };
   }, [refreshServices]);
@@ -178,6 +185,18 @@ const ServiceDashboard: React.FC = () => {
 
   return (
     <div>
+      {apiError && (
+        <Alert
+          type="error"
+          icon={<WarningOutlined />}
+          message="系统错误"
+          description={apiError}
+          closable
+          onClose={() => setApiError(null)}
+          style={{ marginBottom: 16 }}
+        />
+      )}
+
       <Space style={{ marginBottom: 16 }}>
         <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>
           添加服务
